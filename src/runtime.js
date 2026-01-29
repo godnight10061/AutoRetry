@@ -98,6 +98,9 @@ export function createAutoRetryRuntime({
     const id = Number(messageId);
     if (!Number.isInteger(id) || id < 0 || id >= chat.length) return;
 
+    const latest = findLatestAssistantMessage(chat);
+    if (!latest || latest.index !== id) return;
+
     const message = chat[id];
     if (!message || message.is_system || message.is_user) return;
 

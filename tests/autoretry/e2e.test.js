@@ -335,3 +335,55 @@ test('e2e: accepts <game>...</game> as valid (no auto-regenerate)', () => {
 
   runtime.dispose();
 });
+
+test('e2e: does not trigger on re-render of older assistant messages after user sends a message', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+    CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 1,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+  });
+
+  context.chat.push({ is_user: false, is_system: false, mes: 'old assistant (invalid)' });
+  context.chat.push({ is_user: true, mes: 'new user message' });
+  eventBus.emit(eventTypes.MESSAGE_SENT, 1);
+
+  eventBus.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, 0, 'normal');
+  scheduler.advanceBy(0);
+  assert.equal(regenClicks, 0);
+
+  context.chat.push({ is_user: false, is_system: false, mes: 'new assistant (invalid)' });
+  eventBus.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, 2, 'normal');
+  scheduler.advanceBy(0);
+  assert.equal(regenClicks, 1);
+
+  runtime.dispose();
+});
