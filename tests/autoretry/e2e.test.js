@@ -243,3 +243,49 @@ test('e2e: empty assistant message still triggers regenerate', () => {
 
   runtime.dispose();
 });
+
+test('e2e: triggers on CHARACTER_MESSAGE_RENDERED (some flows never emit GENERATION_ENDED)', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+    CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 1,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+  });
+
+  context.chat.push({ is_user: true, mes: 'hi' });
+  context.chat.push({ is_user: false, is_system: false, mes: 'invalid' });
+
+  eventBus.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, 1, 'normal');
+  scheduler.advanceBy(0);
+  assert.equal(regenClicks, 1);
+
+  runtime.dispose();
+});

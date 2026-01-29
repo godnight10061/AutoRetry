@@ -8,6 +8,15 @@ function onEvent(bus, eventName, handler) {
   bus?.on?.(eventName, handler);
 }
 
+function onEventMakeLast(bus, eventName, handler) {
+  if (typeof bus?.makeLast === 'function') {
+    bus.makeLast(eventName, handler);
+    return;
+  }
+
+  onEvent(bus, eventName, handler);
+}
+
 function offEvent(bus, eventName, handler) {
   if (typeof bus?.off === 'function') {
     bus.off(eventName, handler);
@@ -81,11 +90,30 @@ export function createAutoRetryRuntime({
     controller.onGenerationEnded({ messageKey, messageText: latest.text });
   };
 
+  const onCharacterMessageRendered = (messageId) => {
+    const context = getContext?.() ?? {};
+    const chat = context.chat;
+    if (!Array.isArray(chat)) return;
+
+    const id = Number(messageId);
+    if (!Number.isInteger(id) || id < 0 || id >= chat.length) return;
+
+    const message = chat[id];
+    if (!message || message.is_system || message.is_user) return;
+
+    const chatId = typeof context.chatId === 'string' ? context.chatId : 'unknown';
+    const messageKey = `${chatId}:${id}`;
+    const messageText = typeof message.mes === 'string' ? message.mes : '';
+
+    controller.onGenerationEnded({ messageKey, messageText });
+  };
+
   const onMessageSent = () => controller.onUserMessageSent();
   const onChatChanged = () => controller.onChatChanged();
 
   onEvent(eventBus, eventTypes.GENERATION_STARTED, onGenerationStarted);
   onEvent(eventBus, eventTypes.GENERATION_ENDED, onGenerationEnded);
+  onEventMakeLast(eventBus, eventTypes.CHARACTER_MESSAGE_RENDERED, onCharacterMessageRendered);
   onEvent(eventBus, eventTypes.MESSAGE_SENT, onMessageSent);
   onEvent(eventBus, eventTypes.CHAT_CHANGED, onChatChanged);
 
@@ -95,6 +123,7 @@ export function createAutoRetryRuntime({
     dispose: () => {
       offEvent(eventBus, eventTypes.GENERATION_STARTED, onGenerationStarted);
       offEvent(eventBus, eventTypes.GENERATION_ENDED, onGenerationEnded);
+      offEvent(eventBus, eventTypes.CHARACTER_MESSAGE_RENDERED, onCharacterMessageRendered);
       offEvent(eventBus, eventTypes.MESSAGE_SENT, onMessageSent);
       offEvent(eventBus, eventTypes.CHAT_CHANGED, onChatChanged);
       controller.dispose();
