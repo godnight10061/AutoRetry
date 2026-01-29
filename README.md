@@ -1,10 +1,10 @@
 # AutoRetry (SillyTavern Extension)
 
-Automatically clicks **Regenerate** when the latest **assistant** message does not contain a non-empty `<正文>...</正文>` block.
+Automatically clicks **Regenerate** when the latest **assistant** message does not contain a non-empty `<正文>...</正文>` or `<game>...</game>` block.
 
 ## What counts as “valid”
 
-The message is considered valid if it contains at least one well-ordered `<正文>...</正文>` pair whose inner text (after trimming whitespace) is non-empty.
+The message is considered valid if it contains at least one well-ordered `<正文>...</正文>` or `<game>...</game>` pair whose inner text (after trimming whitespace) is non-empty.
 
 ## Install
 

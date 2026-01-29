@@ -6,9 +6,9 @@
 export function hasValidZhengwenTag(text) {
   if (typeof text !== 'string') return false;
 
-  const regex = /<正文>([\s\S]*?)<\/正文>/g;
+  const regex = /<(正文|game)>([\s\S]*?)<\/\1>/g;
   for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
-    const inner = match[1];
+    const inner = match[2];
     if (typeof inner === 'string' && inner.trim().length > 0) {
       return true;
     }
@@ -16,4 +16,3 @@ export function hasValidZhengwenTag(text) {
 
   return false;
 }
-

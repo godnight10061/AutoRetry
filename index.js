@@ -76,7 +76,7 @@ function addSettingsUi(settings) {
         </div>
 
         <small>
-          Auto-regenerates when the last assistant message has no non-empty <code>&lt;正文&gt;...&lt;/正文&gt;</code>.
+          Auto-regenerates when the last assistant message has no non-empty <code>&lt;正文&gt;...&lt;/正文&gt;</code> or <code>&lt;game&gt;...&lt;/game&gt;</code>.
         </small>
       </div>
     </div>
