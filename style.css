@@ -1,0 +1,10 @@
+#autoretry_container .autoretry-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#autoretry_container .autoretry-row > label {
+  margin: 0;
+}
+

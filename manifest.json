@@ -1,0 +1,11 @@
+{
+  "display_name": "AutoRetry (正文 Guard)",
+  "loading_order": 50,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "godnight10061",
+  "version": "0.1.0",
+  "homePage": "https://github.com/godnight10061/AutoRetry"
+}
