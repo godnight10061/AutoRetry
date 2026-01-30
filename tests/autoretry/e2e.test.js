@@ -387,3 +387,96 @@ test('e2e: does not trigger on re-render of older assistant messages after user 
 
   runtime.dispose();
 });
+
+test('e2e: blocks Auto-Continue-Timeskip sends until assistant message is valid, then allows exactly once', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+    CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  const autoRetrySettings = {
+    enabled: true,
+    maxRetries: 10,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+
+    const attempt = regenClicks;
+    scheduler.setTimeout(() => {
+      const isValid = attempt >= 3;
+      context.chat[1].mes = isValid ? '<正文>ok</正文>' : 'still invalid';
+      eventBus.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, 1, 'normal');
+      eventBus.emit(eventTypes.GENERATION_ENDED);
+    }, 100);
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => autoRetrySettings,
+    scheduler,
+  });
+
+  const autoContinueSettings = {
+    enabled: true,
+    autoContinue: true,
+    selectedOption: '继续',
+    timeskipOptions: ['继续'],
+  };
+
+  let continuesSent = 0;
+  const attemptAutoContinueSend = () => {
+    if (
+      runtime.shouldBlockAutoContinueTimeskipSend({
+        isTrusted: false,
+        messageText: autoContinueSettings.selectedOption,
+        autoContinueSettings,
+      })
+    ) {
+      return;
+    }
+
+    continuesSent += 1;
+    context.chat.push({ is_user: true, mes: autoContinueSettings.selectedOption });
+    eventBus.emit(eventTypes.MESSAGE_SENT, context.chat.length - 1);
+  };
+
+  eventBus.on(eventTypes.GENERATION_ENDED, () => {
+    scheduler.setTimeout(attemptAutoContinueSend, 1000);
+  });
+
+  context.chat.push({ is_user: true, mes: 'hi' });
+  context.chat.push({ is_user: false, is_system: false, mes: 'invalid' });
+
+  eventBus.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, 1, 'normal');
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+
+  scheduler.advanceBy(0);
+  assert.equal(regenClicks, 1);
+
+  scheduler.advanceBy(100);
+  scheduler.advanceBy(100);
+  scheduler.advanceBy(100);
+  assert.equal(regenClicks, 3);
+
+  scheduler.advanceBy(700);
+  scheduler.advanceBy(400);
+  assert.equal(continuesSent, 1);
+
+  runtime.dispose();
+});

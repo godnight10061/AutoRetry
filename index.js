@@ -134,6 +134,34 @@ jQuery(() => {
   document.addEventListener(
     'click',
     (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const sendButton = target.closest('#send_but');
+      if (!sendButton) return;
+
+      const textarea = document.getElementById('send_textarea');
+      const messageText = textarea instanceof HTMLTextAreaElement ? textarea.value : '';
+      const autoContinueSettings = extension_settings?.['auto-continue-timeskip'];
+
+      if (
+        runtime.shouldBlockAutoContinueTimeskipSend({
+          isTrusted: event.isTrusted,
+          messageText,
+          autoContinueSettings,
+        })
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'click',
+    (event) => {
       if (isAutoClick) return;
 
       const target = event.target;

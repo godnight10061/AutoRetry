@@ -29,6 +29,12 @@ In **Extensions**, look for **AutoRetry (正文 Guard)**:
 - **Cooldown (ms)**: delay before each auto-regenerate.
 - **Stop on manual Regenerate**: if you manually click Regenerate, AutoRetry won’t auto-retry again until you send a new message.
 
+## Compatibility
+
+### Auto-Continue-Timeskip
+
+When `Auto-Continue-Timeskip` is installed and **Auto Continue** is enabled, AutoRetry blocks the extension’s programmatic “continue/timeskip” send until the latest assistant message becomes valid, then allows it exactly once.
+
 ## Local tests
 
 Requires Node.js (no dependencies).
