@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createAutoRetryRuntime } from '../../src/runtime.js';
 
+const silentLogger = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
 class FakeScheduler {
   #nowMs = 0;
   #nextId = 1;
@@ -71,6 +77,7 @@ test('e2e: invalid assistant message triggers regenerate up to maxRetries then s
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: true, mes: 'hi' });
@@ -129,6 +136,7 @@ test('e2e: resets on user message sent', () => {
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: true, mes: 'hi' });
@@ -180,6 +188,7 @@ test('e2e: stopOnManualRegen suppresses auto retries until next user message', (
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: true, mes: 'hi' });
@@ -233,6 +242,7 @@ test('e2e: empty assistant message still triggers regenerate', () => {
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: true, mes: 'hi' });
@@ -278,6 +288,7 @@ test('e2e: triggers on CHARACTER_MESSAGE_RENDERED (some flows never emit GENERAT
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: true, mes: 'hi' });
@@ -324,6 +335,7 @@ test('e2e: accepts <game>...</game> as valid (no auto-regenerate)', () => {
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: true, mes: 'hi' });
@@ -370,6 +382,7 @@ test('e2e: does not trigger on re-render of older assistant messages after user 
     clickRegenerate,
     getSettings: () => settings,
     scheduler,
+    logger: silentLogger,
   });
 
   context.chat.push({ is_user: false, is_system: false, mes: 'old assistant (invalid)' });
@@ -430,6 +443,7 @@ test('e2e: blocks Auto-Continue-Timeskip sends until assistant message is valid,
     clickRegenerate,
     getSettings: () => autoRetrySettings,
     scheduler,
+    logger: silentLogger,
   });
 
   const autoContinueSettings = {
@@ -477,6 +491,74 @@ test('e2e: blocks Auto-Continue-Timeskip sends until assistant message is valid,
   scheduler.advanceBy(700);
   scheduler.advanceBy(400);
   assert.equal(continuesSent, 1);
+
+  runtime.dispose();
+});
+
+test('e2e: logs retry schedule, regen click, and max-retry stop', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const logs = [];
+  const logger = {
+    info: (...args) => logs.push({ level: 'info', args }),
+    warn: (...args) => logs.push({ level: 'warn', args }),
+    error: (...args) => logs.push({ level: 'error', args }),
+  };
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 1,
+    cooldownMs: 10,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+    logger,
+  });
+
+  context.chat.push({ is_user: true, mes: 'hi' });
+  context.chat.push({ is_user: false, is_system: false, mes: 'invalid' });
+
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+  assert.ok(
+    logs.some((l) => l.level === 'info' && l.args[1] === 'retry scheduled'),
+    'expected a retry scheduled log',
+  );
+
+  scheduler.advanceBy(10);
+  assert.equal(regenClicks, 1);
+  assert.ok(
+    logs.some((l) => l.level === 'info' && l.args[1] === 'regen click'),
+    'expected a regen click log',
+  );
+
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+  assert.ok(
+    logs.some((l) => l.level === 'warn' && l.args[1] === 'max retries reached'),
+    'expected a max retries reached log',
+  );
 
   runtime.dispose();
 });

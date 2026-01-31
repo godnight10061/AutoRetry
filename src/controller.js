@@ -13,6 +13,7 @@ export class AutoRetryController {
   #retryCount = 0;
   #lastMessageKey = null;
   #suppressedByManualRegen = false;
+  #loggedMaxRetriesMessageKey = null;
 
   /**
    * @param {object} deps
@@ -63,11 +64,13 @@ export class AutoRetryController {
     if (this.#lastMessageKey !== messageKey) {
       this.#retryCount = 0;
       this.#lastMessageKey = messageKey;
+      this.#loggedMaxRetriesMessageKey = null;
       this.#cancelPending();
     }
 
     if (hasValidZhengwenTag(messageText)) {
       this.#retryCount = 0;
+      this.#loggedMaxRetriesMessageKey = null;
       return;
     }
 
@@ -76,6 +79,13 @@ export class AutoRetryController {
     }
 
     if (this.#retryCount >= settings.maxRetries) {
+      if (this.#loggedMaxRetriesMessageKey !== messageKey) {
+        this.#loggedMaxRetriesMessageKey = messageKey;
+        this.#logger?.warn?.('[AutoRetry]', 'max retries reached', {
+          messageKey,
+          maxRetries: settings.maxRetries,
+        });
+      }
       return;
     }
 
@@ -84,7 +94,15 @@ export class AutoRetryController {
     }
 
     this.#retryCount += 1;
+    const attempt = this.#retryCount;
     const cooldownMs = settings.cooldownMs;
+
+    this.#logger?.info?.('[AutoRetry]', 'retry scheduled', {
+      messageKey,
+      attempt,
+      maxRetries: settings.maxRetries,
+      cooldownMs,
+    });
 
     this.#pendingTimerId = this.#scheduler.setTimeout(() => {
       this.#pendingTimerId = null;
@@ -95,6 +113,10 @@ export class AutoRetryController {
       if (latestSettings.stopOnManualRegen && this.#suppressedByManualRegen) return;
 
       try {
+        this.#logger?.info?.('[AutoRetry]', 'regen click', {
+          messageKey,
+          attempt,
+        });
         this.#requestRegenerate();
       } catch (err) {
         this.#logger?.error?.(err);
@@ -116,7 +138,12 @@ export class AutoRetryController {
 
     this.#suppressedByManualRegen = true;
     this.#retryCount = 0;
+    this.#loggedMaxRetriesMessageKey = null;
     this.#cancelPending();
+
+    this.#logger?.info?.('[AutoRetry]', 'manual regenerate detected', {
+      stopOnManualRegen: true,
+    });
   }
 
   #cancelPending() {
@@ -136,6 +163,7 @@ export class AutoRetryController {
     this.#lastMessageKey = null;
     this.#suppressedByManualRegen = false;
     this.#isGenerating = false;
+    this.#loggedMaxRetriesMessageKey = null;
     this.#cancelPending();
   }
 

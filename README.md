@@ -29,6 +29,10 @@ In **Extensions**, look for **AutoRetry (正文 Guard)**:
 - **Cooldown (ms)**: delay before each auto-regenerate.
 - **Stop on manual Regenerate**: if you manually click Regenerate, AutoRetry won’t auto-retry again until you send a new message.
 
+## Logs
+
+Open the browser DevTools console to see `[AutoRetry] ...` logs for auto-retry attempts and stop reasons.
+
 ## Compatibility
 
 ### Auto-Continue-Timeskip
