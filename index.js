@@ -116,6 +116,19 @@ jQuery(() => {
   const settings = ensureSettings();
   addSettingsUi(settings);
 
+  const logger = {
+    info: (...args) => console.log(...args),
+    warn: (...args) => console.warn(...args),
+    error: (...args) => console.error(...args),
+  };
+
+  logger.info('[AutoRetry]', 'init', {
+    enabled: settings.enabled === true,
+    maxRetries: settings.maxRetries,
+    cooldownMs: settings.cooldownMs,
+    stopOnManualRegen: settings.stopOnManualRegen === true,
+  });
+
   let isAutoClick = false;
   const markAutoClick = (value) => {
     isAutoClick = value;
@@ -128,7 +141,7 @@ jQuery(() => {
     clickRegenerate: () => clickRegenerateOption({ markAutoClick }),
     getSettings: () => ensureSettings(),
     scheduler: window,
-    logger: console,
+    logger,
   });
 
   document.addEventListener(

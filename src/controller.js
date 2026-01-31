@@ -14,6 +14,8 @@ export class AutoRetryController {
   #lastMessageKey = null;
   #suppressedByManualRegen = false;
   #loggedMaxRetriesMessageKey = null;
+  #loggedCheckMessageKey = null;
+  #loggedCheckValid = null;
 
   /**
    * @param {object} deps
@@ -68,7 +70,19 @@ export class AutoRetryController {
       this.#cancelPending();
     }
 
-    if (hasValidZhengwenTag(messageText)) {
+    const valid = hasValidZhengwenTag(messageText);
+    if (this.#loggedCheckMessageKey !== messageKey || this.#loggedCheckValid !== valid) {
+      this.#loggedCheckMessageKey = messageKey;
+      this.#loggedCheckValid = valid;
+      this.#logger?.info?.('[AutoRetry]', 'check', {
+        messageKey,
+        valid,
+        retryCount: this.#retryCount,
+        maxRetries: settings.maxRetries,
+      });
+    }
+
+    if (valid) {
       this.#retryCount = 0;
       this.#loggedMaxRetriesMessageKey = null;
       return;
@@ -139,6 +153,8 @@ export class AutoRetryController {
     this.#suppressedByManualRegen = true;
     this.#retryCount = 0;
     this.#loggedMaxRetriesMessageKey = null;
+    this.#loggedCheckMessageKey = null;
+    this.#loggedCheckValid = null;
     this.#cancelPending();
 
     this.#logger?.info?.('[AutoRetry]', 'manual regenerate detected', {
@@ -164,6 +180,8 @@ export class AutoRetryController {
     this.#suppressedByManualRegen = false;
     this.#isGenerating = false;
     this.#loggedMaxRetriesMessageKey = null;
+    this.#loggedCheckMessageKey = null;
+    this.#loggedCheckValid = null;
     this.#cancelPending();
   }
 

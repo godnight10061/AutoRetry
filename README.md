@@ -31,7 +31,13 @@ In **Extensions**, look for **AutoRetry (正文 Guard)**:
 
 ## Logs
 
-Open the browser DevTools console to see `[AutoRetry] ...` logs for auto-retry attempts and stop reasons.
+Open the browser DevTools console (F12) to see `[AutoRetry] ...` logs (this is a frontend extension, so it won’t show in the server terminal).
+
+Common lines:
+
+- `init`: extension loaded + current settings snapshot
+- `check`: evaluated the latest assistant message (valid/invalid)
+- `retry scheduled` / `regen click` / `max retries reached`
 
 ## Compatibility
 

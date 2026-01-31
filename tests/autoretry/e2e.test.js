@@ -562,3 +562,59 @@ test('e2e: logs retry schedule, regen click, and max-retry stop', () => {
 
   runtime.dispose();
 });
+
+test('e2e: logs check for valid message (no retry)', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const logs = [];
+  const logger = {
+    info: (...args) => logs.push({ level: 'info', args }),
+    warn: (...args) => logs.push({ level: 'warn', args }),
+    error: (...args) => logs.push({ level: 'error', args }),
+  };
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 2,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+    logger,
+  });
+
+  context.chat.push({ is_user: true, mes: 'hi' });
+  context.chat.push({ is_user: false, is_system: false, mes: '<正文>ok</正文>' });
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+
+  assert.equal(regenClicks, 0);
+  assert.ok(
+    logs.some((l) => l.level === 'info' && l.args[1] === 'check' && l.args[2]?.valid === true),
+    'expected a check log for a valid message',
+  );
+
+  runtime.dispose();
+});
