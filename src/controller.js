@@ -85,6 +85,7 @@ export class AutoRetryController {
     if (valid) {
       this.#retryCount = 0;
       this.#loggedMaxRetriesMessageKey = null;
+      this.#cancelPending();
       return;
     }
 

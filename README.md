@@ -47,6 +47,8 @@ Common lines:
 
 When `Auto-Continue-Timeskip` is installed and **Auto Continue** is enabled, AutoRetry blocks the extension’s programmatic “continue/timeskip” send until the latest assistant message becomes valid, then allows it exactly once.
 
+If the generation ends with **no assistant message** (e.g. API/streaming failure), AutoRetry treats it as invalid output and retries after a short settle delay.
+
 ## Local tests
 
 Requires Node.js (no dependencies).

@@ -618,3 +618,61 @@ test('e2e: logs check for valid message (no retry)', () => {
 
   runtime.dispose();
 });
+
+test('e2e: retries when generation ends with no assistant message (API error)', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const logs = [];
+  const logger = {
+    info: (...args) => logs.push({ level: 'info', args }),
+    warn: (...args) => logs.push({ level: 'warn', args }),
+    error: (...args) => logs.push({ level: 'error', args }),
+  };
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 1,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+    logger,
+  });
+
+  context.chat.push({ is_user: true, mes: 'hi' });
+
+  eventBus.emit(eventTypes.GENERATION_STARTED);
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+
+  scheduler.advanceBy(250);
+  assert.equal(regenClicks, 1);
+  assert.ok(
+    logs.some((l) => l.level === 'info' && l.args[1] === 'retry scheduled'),
+    'expected a retry scheduled log',
+  );
+
+  runtime.dispose();
+});
