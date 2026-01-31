@@ -49,6 +49,8 @@ When `Auto-Continue-Timeskip` is installed and **Auto Continue** is enabled, Aut
 
 If the generation ends with **no assistant message** (e.g. API/streaming failure), AutoRetry treats it as invalid output and retries after a short settle delay.
 
+AutoRetry also ignores the initial assistant greeting before you send any message (so it won’t spam retries on conversation start).
+
 ## Local tests
 
 Requires Node.js (no dependencies).

@@ -676,3 +676,54 @@ test('e2e: retries when generation ends with no assistant message (API error)', 
 
   runtime.dispose();
 });
+
+test('e2e: does not retry on initial assistant greeting before any user message', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+    CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const clickRegenerate = () => {
+    regenClicks += 1;
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 3,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+    logger: silentLogger,
+  });
+
+  context.chat.push({ is_user: false, is_system: false, mes: 'greeting without tags' });
+
+  eventBus.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, 0, 'normal');
+  scheduler.advanceBy(0);
+  assert.equal(regenClicks, 0);
+
+  eventBus.emit(eventTypes.GENERATION_STARTED);
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+  scheduler.advanceBy(500);
+  assert.equal(regenClicks, 0);
+
+  runtime.dispose();
+});

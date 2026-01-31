@@ -53,6 +53,15 @@ function findLatestAssistantMessage(chat) {
 }
 
 /**
+ * @param {any[]} chat
+ * @returns {boolean}
+ */
+function hasAnyUserMessage(chat) {
+  if (!Array.isArray(chat)) return false;
+  return chat.some((msg) => Boolean(msg && msg.is_user));
+}
+
+/**
  * Finds the assistant message index we should validate for the current generation.
  * - If the last non-system message is a user message, the assistant reply is expected at the next index.
  * - If the last non-system message is an assistant message, we assume a regenerate flow and reuse that index.
@@ -134,13 +143,14 @@ export function createAutoRetryRuntime({
     logger,
   });
 
-  /** @type {{seq: number, chatId: string | null, targetIndex: number | null, isGenerating: boolean, settleTimerId: any}} */
+  /** @type {{seq: number, chatId: string | null, targetIndex: number | null, isGenerating: boolean, settleTimerId: any, ignoreUntilUserMessage: boolean}} */
   const generationSession = {
     seq: 0,
     chatId: null,
     targetIndex: null,
     isGenerating: false,
     settleTimerId: null,
+    ignoreUntilUserMessage: false,
   };
 
   /**
@@ -194,6 +204,7 @@ export function createAutoRetryRuntime({
     generationSession.targetIndex = null;
     generationSession.isGenerating = false;
     cancelSettle();
+    generationSession.ignoreUntilUserMessage = false;
   };
 
   const resetGenerationSession = () => {
@@ -210,11 +221,13 @@ export function createAutoRetryRuntime({
     const context = getContext?.() ?? {};
     const chatId = typeof context.chatId === 'string' ? context.chatId : 'unknown';
     const targetIndex = computeTargetAssistantIndex(context.chat) ?? 0;
+    const ignoreUntilUserMessage = !hasAnyUserMessage(context.chat);
 
     generationSession.seq += 1;
     generationSession.chatId = chatId;
     generationSession.targetIndex = targetIndex;
     generationSession.isGenerating = true;
+    generationSession.ignoreUntilUserMessage = ignoreUntilUserMessage;
     cancelSettle();
 
     updateAutoContinueGate({ chatId, assistantIndex: targetIndex, assistantText: '' });
@@ -226,6 +239,14 @@ export function createAutoRetryRuntime({
   const onGenerationEnded = () => {
     const context = getContext?.() ?? {};
     const chatId = typeof context.chatId === 'string' ? context.chatId : 'unknown';
+
+    if (generationSession.ignoreUntilUserMessage && !hasAnyUserMessage(context.chat)) {
+      generationSession.isGenerating = false;
+      cancelSettle();
+      logger?.info?.('[AutoRetry]', 'skip retry (no user messages yet)', { chatId });
+      return;
+    }
+
     const targetIndex =
       generationSession.chatId === chatId && Number.isInteger(generationSession.targetIndex)
         ? generationSession.targetIndex
@@ -271,6 +292,11 @@ export function createAutoRetryRuntime({
     const context = getContext?.() ?? {};
     const chat = context.chat;
     if (!Array.isArray(chat)) return;
+
+    if (!hasAnyUserMessage(chat)) {
+      // Ignore the initial assistant greeting (before the user sends any message).
+      return;
+    }
 
     const id = Number(messageId);
     if (!Number.isInteger(id) || id < 0 || id >= chat.length) return;
@@ -324,11 +350,16 @@ export function createAutoRetryRuntime({
         return true;
       }
 
+      const context = getContext?.() ?? {};
+      if (!hasAnyUserMessage(context.chat)) {
+        // Conversation hasn't started yet; don't interfere with auto-continue.
+        return false;
+      }
+
       if (!autoContinueGate.messageKey) {
         return false;
       }
 
-      const context = getContext?.() ?? {};
       const chatId = typeof context.chatId === 'string' ? context.chatId : 'unknown';
       if (autoContinueGate.chatId !== chatId) {
         return false;
