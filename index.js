@@ -11,6 +11,25 @@ const DEFAULT_SETTINGS = Object.freeze({
   stopOnManualRegen: true,
 });
 
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatLogArgs(args) {
+  return args
+    .map((arg) => {
+      if (arg instanceof Error) return arg.stack ?? arg.message ?? String(arg);
+      if (typeof arg === 'string') return arg;
+      if (typeof arg === 'number' || typeof arg === 'boolean' || arg === null || arg === undefined) return String(arg);
+      return safeStringify(arg);
+    })
+    .join(' ');
+}
+
 function ensureSettings() {
   if (!extension_settings[SETTINGS_KEY] || typeof extension_settings[SETTINGS_KEY] !== 'object') {
     extension_settings[SETTINGS_KEY] = {};
@@ -78,6 +97,24 @@ function addSettingsUi(settings) {
         <small>
           Auto-regenerates when the last assistant message has no non-empty <code>&lt;正文&gt;...&lt;/正文&gt;</code> or <code>&lt;game&gt;...&lt;/game&gt;</code>.
         </small>
+
+        <hr />
+
+        <div class="autoretry-row">
+          <label>Status</label>
+          <div id="autoretry_status" class="autoretry-status">Not initialized</div>
+        </div>
+
+        <div class="autoretry-row autoretry-row-column">
+          <label for="autoretry_debug_log">Debug log</label>
+          <textarea id="autoretry_debug_log" class="text_pole autoretry-debug-log" readonly></textarea>
+        </div>
+
+        <div class="autoretry-row">
+          <button id="autoretry_debug_test" type="button" class="menu_button">Test log</button>
+          <button id="autoretry_debug_copy" type="button" class="menu_button">Copy</button>
+          <button id="autoretry_debug_clear" type="button" class="menu_button">Clear</button>
+        </div>
       </div>
     </div>
   `;
@@ -116,18 +153,95 @@ jQuery(() => {
   const settings = ensureSettings();
   addSettingsUi(settings);
 
-  const logger = {
-    info: (...args) => console.log(...args),
-    warn: (...args) => console.warn(...args),
-    error: (...args) => console.error(...args),
+  const statusEl = document.getElementById('autoretry_status');
+  const logEl = document.getElementById('autoretry_debug_log');
+  const testBtn = document.getElementById('autoretry_debug_test');
+  const copyBtn = document.getElementById('autoretry_debug_copy');
+  const clearBtn = document.getElementById('autoretry_debug_clear');
+
+  const logLines = [];
+  const maxLogLines = 200;
+  let logSeq = 0;
+
+  const updateLogUi = (lastLine) => {
+    if (typeof lastLine === 'string' && statusEl) {
+      statusEl.textContent = lastLine;
+    }
+    if (logEl) {
+      logEl.value = logLines.join('\n');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
   };
 
-  logger.info('[AutoRetry]', 'init', {
+  const appendLogLine = (level, args) => {
+    logSeq += 1;
+    const msg = formatLogArgs(args);
+    const line = `${String(logSeq).padStart(3, '0')} ${level.toUpperCase()} ${msg}`;
+    logLines.push(line);
+    if (logLines.length > maxLogLines) {
+      logLines.splice(0, logLines.length - maxLogLines);
+    }
+    updateLogUi(line);
+  };
+
+  const logger = {
+    info: (...args) => {
+      console.log(...args);
+      appendLogLine('info', args);
+    },
+    warn: (...args) => {
+      console.warn(...args);
+      appendLogLine('warn', args);
+    },
+    error: (...args) => {
+      console.error(...args);
+      appendLogLine('error', args);
+    },
+  };
+
+  // One-time breadcrumb for visibility (warn is harder to miss than info/log).
+  logger.warn('[AutoRetry]', 'loaded', {
     enabled: settings.enabled === true,
     maxRetries: settings.maxRetries,
     cooldownMs: settings.cooldownMs,
     stopOnManualRegen: settings.stopOnManualRegen === true,
   });
+
+  try {
+    const toastKey = 'autoretry_toast_shown_v1';
+    if (window.toastr?.info && window.sessionStorage && !window.sessionStorage.getItem(toastKey)) {
+      window.sessionStorage.setItem(toastKey, '1');
+      window.toastr.info('Loaded. Open Extensions → AutoRetry to view debug log.', 'AutoRetry');
+    }
+  } catch (err) {
+    logger.error('[AutoRetry]', 'toast failed', err);
+  }
+
+  if (testBtn) {
+    testBtn.addEventListener('click', () => {
+      logger.info('[AutoRetry]', 'self-test', { ok: true });
+      logger.warn('[AutoRetry]', 'self-test warning');
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      logLines.length = 0;
+      updateLogUi('[AutoRetry] cleared');
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const text = logLines.join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        logger.info('[AutoRetry]', 'copied logs');
+      } catch (err) {
+        logger.error('[AutoRetry]', 'failed to copy logs', err);
+      }
+    });
+  }
 
   let isAutoClick = false;
   const markAutoClick = (value) => {

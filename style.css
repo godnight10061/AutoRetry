@@ -8,3 +8,17 @@
   margin: 0;
 }
 
+#autoretry_container .autoretry-row-column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+#autoretry_container .autoretry-status {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  word-break: break-word;
+}
+
+#autoretry_container .autoretry-debug-log {
+  min-height: 10em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}

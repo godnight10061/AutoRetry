@@ -33,6 +33,8 @@ In **Extensions**, look for **AutoRetry (正文 Guard)**:
 
 Open the browser DevTools console (F12) to see `[AutoRetry] ...` logs (this is a frontend extension, so it won’t show in the server terminal).
 
+Also, in **Extensions → AutoRetry**, there is a built-in **Status** line and **Debug log** panel (with a **Test log** button) so you can confirm AutoRetry is loaded even if your console is filtered.
+
 Common lines:
 
 - `init`: extension loaded + current settings snapshot
