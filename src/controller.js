@@ -38,6 +38,7 @@ export class AutoRetryController {
 
   onGenerationStarted() {
     this.#isGenerating = true;
+    this.#suppressedByManualRegen = false;
     this.#cancelPending();
   }
 

@@ -155,7 +155,7 @@ test('e2e: resets on user message sent', () => {
   runtime.dispose();
 });
 
-test('e2e: stopOnManualRegen suppresses auto retries until next user message', () => {
+test('e2e: manual regenerate cancels pending retry but keeps auto-retry active for same turn', () => {
   const eventBus = new EventEmitter();
   const scheduler = new FakeScheduler();
 
@@ -176,7 +176,7 @@ test('e2e: stopOnManualRegen suppresses auto retries until next user message', (
 
   const settings = {
     enabled: true,
-    maxRetries: 5,
+    maxRetries: 2,
     cooldownMs: 0,
     stopOnManualRegen: true,
   };
@@ -194,14 +194,13 @@ test('e2e: stopOnManualRegen suppresses auto retries until next user message', (
   context.chat.push({ is_user: true, mes: 'hi' });
   context.chat.push({ is_user: false, is_system: false, mes: 'invalid' });
 
-  runtime.notifyManualRegenerate();
   eventBus.emit(eventTypes.GENERATION_ENDED);
+  runtime.notifyManualRegenerate();
   scheduler.advanceBy(0);
   assert.equal(regenClicks, 0);
 
-  eventBus.emit(eventTypes.MESSAGE_SENT);
-
-  context.chat.push({ is_user: false, is_system: false, mes: 'invalid again' });
+  eventBus.emit(eventTypes.GENERATION_STARTED);
+  context.chat[1].mes = 'invalid again';
   eventBus.emit(eventTypes.GENERATION_ENDED);
   scheduler.advanceBy(0);
   assert.equal(regenClicks, 1);
