@@ -139,7 +139,10 @@ export function createAutoRetryRuntime({
   const controller = new AutoRetryController({
     getSettings,
     scheduler,
-    requestRegenerate: clickRegenerate,
+    requestRegenerate: () => {
+      clearStaleAssistantOutputBeforeRetry();
+      clickRegenerate();
+    },
     logger,
   });
 
@@ -185,6 +188,27 @@ export function createAutoRetryRuntime({
     }
 
     autoContinueGate.assistantValid = hasValidZhengwenTag(assistantText);
+  };
+
+  const clearStaleAssistantOutputBeforeRetry = () => {
+    const context = getContext?.() ?? {};
+    const chat = context.chat;
+    if (!Array.isArray(chat)) return;
+
+    const chatId = typeof context.chatId === 'string' ? context.chatId : 'unknown';
+    const targetIndex =
+      generationSession.chatId === chatId && Number.isInteger(generationSession.targetIndex)
+        ? generationSession.targetIndex
+        : computeTargetAssistantIndex(chat);
+
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= chat.length) return;
+
+    const message = chat[targetIndex];
+    if (!message || message.is_system || message.is_user) return;
+    if (typeof message.mes !== 'string' || message.mes.length === 0) return;
+
+    message.mes = '';
+    updateAutoContinueGate({ chatId, assistantIndex: targetIndex, assistantText: '' });
   };
 
   const cancelSettle = () => {

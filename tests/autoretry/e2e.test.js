@@ -253,6 +253,62 @@ test('e2e: empty assistant message still triggers regenerate', () => {
   runtime.dispose();
 });
 
+test('e2e: retries from failed partial stream by discarding stale assistant output', () => {
+  const eventBus = new EventEmitter();
+  const scheduler = new FakeScheduler();
+
+  const eventTypes = {
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SENT: 'message_sent',
+    CHAT_CHANGED: 'chat_id_changed',
+  };
+
+  const context = { chatId: 'chat-a', chat: [] };
+  const getContext = () => context;
+
+  let regenClicks = 0;
+  const regeneratedText = '<姝ｆ枃>fresh reply</姝ｆ枃>';
+  const clickRegenerate = () => {
+    regenClicks += 1;
+
+    const previous = context.chat[1]?.mes ?? '';
+    context.chat[1].mes = previous.includes('partial invalid') ? `${previous}${regeneratedText}` : regeneratedText;
+
+    eventBus.emit(eventTypes.GENERATION_STARTED);
+    eventBus.emit(eventTypes.GENERATION_ENDED);
+  };
+
+  const settings = {
+    enabled: true,
+    maxRetries: 1,
+    cooldownMs: 0,
+    stopOnManualRegen: false,
+  };
+
+  const runtime = createAutoRetryRuntime({
+    eventBus,
+    eventTypes,
+    getContext,
+    clickRegenerate,
+    getSettings: () => settings,
+    scheduler,
+    logger: silentLogger,
+  });
+
+  context.chat.push({ is_user: true, mes: 'hi' });
+  eventBus.emit(eventTypes.GENERATION_STARTED);
+
+  context.chat.push({ is_user: false, is_system: false, mes: 'partial invalid' });
+  eventBus.emit(eventTypes.GENERATION_ENDED);
+  scheduler.advanceBy(0);
+
+  assert.equal(regenClicks, 1);
+  assert.equal(context.chat[1].mes, regeneratedText);
+
+  runtime.dispose();
+});
+
 test('e2e: triggers on CHARACTER_MESSAGE_RENDERED (some flows never emit GENERATION_ENDED)', () => {
   const eventBus = new EventEmitter();
   const scheduler = new FakeScheduler();
